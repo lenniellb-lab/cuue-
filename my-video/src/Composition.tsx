@@ -2,13 +2,14 @@ import { CalculateMetadataFunction, Composition } from "remotion";
 import {
   AbsoluteFill,
   Audio,
+  OffthreadVideo,
   Sequence,
   interpolate,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { scenes } from "./scenes";
+import { Clip, credits, scenes } from "./scenes";
 import timing from "./timing.json";
 
 const FPS = 30;
@@ -16,6 +17,7 @@ const PAD_SECONDS = 1.0; // pausa entre escenas
 // Formato vertical para TikTok (9:16)
 const WIDTH = 1080;
 const HEIGHT = 1920;
+const FADE = 8; // frames de fundido entre clips
 
 type Props = {};
 
@@ -44,78 +46,128 @@ const captionAt = (sentences: string[], frame: number, total: number): string =>
   return sentences[sentences.length - 1];
 };
 
-const SceneView: React.FC<{
-  title: string;
-  bullets: string[];
-  narration: string;
-  audio: string;
-  index: number;
-}> = ({ title, bullets, narration, audio, index }) => {
+// Un clip de b-roll a pantalla completa con fundido de entrada y zoom lento.
+const BRoll: React.FC<{ src: string }> = ({ src }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
+  const opacity = interpolate(frame, [0, FADE], [0, 1], { extrapolateRight: "clamp" });
+  const scale = interpolate(frame, [0, durationInFrames], [1.0, 1.08]);
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      <OffthreadVideo
+        src={staticFile(src)}
+        muted
+        style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${scale})` }}
+      />
+    </AbsoluteFill>
+  );
+};
 
-  const fadeIn = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: "clamp" });
-  const fadeOut = interpolate(frame, [durationInFrames - 15, durationInFrames], [1, 0], {
-    extrapolateLeft: "clamp",
+// Reparte los clips de una escena; el último ocupa lo que quede.
+const clipLayout = (clips: Clip[], total: number) => {
+  let from = 0;
+  return clips.map((c, i) => {
+    const len = i === clips.length - 1 ? total - from : Math.round(c.seconds * FPS);
+    const item = { src: c.src, from, len };
+    from += len;
+    return item;
   });
-  const opacity = Math.min(fadeIn, fadeOut);
-  const slide = interpolate(frame, [0, 20], [30, 0], { extrapolateRight: "clamp" });
+};
+
+const SceneView: React.FC<{
+  title: string;
+  narration: string;
+  audio: string;
+  clips: Clip[];
+  showCredits: boolean;
+}> = ({ title, narration, audio, clips, showCredits }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
+  const titleIn = interpolate(frame, [0, 12], [0, 1], { extrapolateRight: "clamp" });
+  const titleSlide = interpolate(frame, [0, 12], [-30, 0], { extrapolateRight: "clamp" });
 
   return (
-    <AbsoluteFill
-      style={{
-        background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #7f1d1d 100%)",
-        color: "#f8fafc",
-        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-        padding: "0 70px",
-        paddingTop: 260,
-        paddingBottom: 520,
-        justifyContent: "center",
-        opacity,
-      }}
-    >
+    <AbsoluteFill style={{ backgroundColor: "#000" }}>
       <Audio src={staticFile(audio)} />
-      <div style={{ transform: `translateY(${slide}px)` }}>
-        <div style={{ fontSize: 34, letterSpacing: 4, opacity: 0.75, textTransform: "uppercase" }}>
-          {String(index + 1).padStart(2, "0")} · Inmigración en EE. UU.
-        </div>
-        <h1 style={{ fontSize: 92, margin: "28px 0 56px", lineHeight: 1.1 }}>{title}</h1>
-        <ul style={{ fontSize: 48, lineHeight: 1.4, paddingLeft: 0, listStyle: "none", margin: 0 }}>
-          {bullets.map((b, i) => {
-            const start = 25 + i * 20;
-            const o = interpolate(frame, [start, start + 15], [0, 1], { extrapolateRight: "clamp" });
-            return (
-              <li key={i} style={{ opacity: o, marginBottom: 14 }}>
-                <span style={{ color: "#fbbf24", marginRight: 14 }}>▸</span>
-                {b}
-              </li>
-            );
-          })}
-        </ul>
+      {clipLayout(clips, durationInFrames).map((c) => (
+        <Sequence key={c.src + c.from} from={c.from} durationInFrames={c.len}>
+          <BRoll src={c.src} />
+        </Sequence>
+      ))}
+
+      {/* Degradados para que el texto se lea sobre cualquier imagen */}
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 28%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: 210,
+          left: 60,
+          right: 60,
+          textAlign: "center",
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+          opacity: titleIn,
+          transform: `translateY(${titleSlide}px)`,
+        }}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            background: "#fbbf24",
+            color: "#111827",
+            fontSize: 64,
+            fontWeight: 800,
+            lineHeight: 1.15,
+            padding: "14px 30px",
+            borderRadius: 18,
+          }}
+        >
+          {title}
+        </span>
       </div>
-      {/* Subtítulos grandes, por encima de la zona de controles de TikTok */}
+
+      {/* Subtítulos por frase, por encima de la zona de controles de TikTok */}
       <div
         style={{
           position: "absolute",
           left: 60,
           right: 60,
-          bottom: 300,
-          fontSize: 44,
-          fontWeight: 700,
-          minHeight: 180,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          lineHeight: 1.35,
+          bottom: 330,
+          fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+          color: "#fff",
+          fontSize: 50,
+          fontWeight: 800,
+          lineHeight: 1.3,
           textAlign: "center",
-          background: "rgba(0,0,0,0.45)",
-          borderRadius: 24,
-          padding: "24px 30px",
-          textShadow: "0 2px 6px rgba(0,0,0,0.6)",
+          textShadow: "0 3px 10px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,1)",
         }}
       >
         {captionAt(splitSentences(narration), frame, durationInFrames - 1)}
       </div>
+
+      {showCredits ? (
+        <div
+          style={{
+            position: "absolute",
+            left: 60,
+            right: 60,
+            bottom: 200,
+            fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+            color: "rgba(255,255,255,0.85)",
+            fontSize: 24,
+            lineHeight: 1.35,
+            textAlign: "center",
+            textShadow: "0 2px 6px rgba(0,0,0,0.9)",
+          }}
+        >
+          {credits}
+        </div>
+      ) : null}
     </AbsoluteFill>
   );
 };
@@ -123,7 +175,7 @@ const SceneView: React.FC<{
 export const MyComponent: React.FC<Props> = () => {
   let offset = 0;
   return (
-    <AbsoluteFill style={{ backgroundColor: "#0f172a" }}>
+    <AbsoluteFill style={{ backgroundColor: "#000" }}>
       {/* Música de fondo en bucle, suave */}
       <Audio src={staticFile("audio/music.mp3")} loop volume={0.12} />
       {scenes.map((s, i) => {
@@ -133,10 +185,10 @@ export const MyComponent: React.FC<Props> = () => {
           <Sequence key={s.id} from={from} durationInFrames={sceneFrames[i]}>
             <SceneView
               title={s.title}
-              bullets={s.bullets}
               narration={s.narration}
               audio={`audio/${s.id}.mp3`}
-              index={i}
+              clips={s.clips}
+              showCredits={i === scenes.length - 1}
             />
           </Sequence>
         );
