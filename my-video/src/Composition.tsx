@@ -13,8 +13,9 @@ import timing from "./timing.json";
 
 const FPS = 30;
 const PAD_SECONDS = 1.0; // pausa entre escenas
-const WIDTH = 1280;
-const HEIGHT = 720;
+// Formato vertical para TikTok (9:16)
+const WIDTH = 1080;
+const HEIGHT = 1920;
 
 type Props = {};
 
@@ -26,6 +27,21 @@ const totalFrames = sceneFrames.reduce((a, b) => a + b, 0);
 
 const calculateMetadata: CalculateMetadataFunction<Props> = () => {
   return { durationInFrames: totalFrames };
+};
+
+// Divide la narración en frases y reparte el tiempo de la escena según su longitud.
+const splitSentences = (text: string) =>
+  text.match(/[^.!?]+[.!?]+/g)?.map((s) => s.trim()) ?? [text];
+
+const captionAt = (sentences: string[], frame: number, total: number): string => {
+  const lengths = sentences.map((s) => s.length);
+  const sum = lengths.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  for (let i = 0; i < sentences.length; i++) {
+    acc += (lengths[i] / sum) * total;
+    if (frame < acc) return sentences[i];
+  }
+  return sentences[sentences.length - 1];
 };
 
 const SceneView: React.FC<{
@@ -51,18 +67,20 @@ const SceneView: React.FC<{
         background: "linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #7f1d1d 100%)",
         color: "#f8fafc",
         fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-        padding: 80,
+        padding: "0 70px",
+        paddingTop: 260,
+        paddingBottom: 520,
         justifyContent: "center",
         opacity,
       }}
     >
       <Audio src={staticFile(audio)} />
       <div style={{ transform: `translateY(${slide}px)` }}>
-        <div style={{ fontSize: 22, letterSpacing: 4, opacity: 0.7, textTransform: "uppercase" }}>
+        <div style={{ fontSize: 34, letterSpacing: 4, opacity: 0.75, textTransform: "uppercase" }}>
           {String(index + 1).padStart(2, "0")} · Inmigración en EE. UU.
         </div>
-        <h1 style={{ fontSize: 60, margin: "18px 0 36px", lineHeight: 1.15 }}>{title}</h1>
-        <ul style={{ fontSize: 32, lineHeight: 1.5, paddingLeft: 0, listStyle: "none", margin: 0 }}>
+        <h1 style={{ fontSize: 92, margin: "28px 0 56px", lineHeight: 1.1 }}>{title}</h1>
+        <ul style={{ fontSize: 48, lineHeight: 1.4, paddingLeft: 0, listStyle: "none", margin: 0 }}>
           {bullets.map((b, i) => {
             const start = 25 + i * 20;
             const o = interpolate(frame, [start, start + 15], [0, 1], { extrapolateRight: "clamp" });
@@ -75,18 +93,28 @@ const SceneView: React.FC<{
           })}
         </ul>
       </div>
+      {/* Subtítulos grandes, por encima de la zona de controles de TikTok */}
       <div
         style={{
           position: "absolute",
           left: 60,
           right: 60,
-          bottom: 40,
-          fontSize: 20,
-          opacity: 0.6,
-          lineHeight: 1.4,
+          bottom: 300,
+          fontSize: 44,
+          fontWeight: 700,
+          minHeight: 180,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          lineHeight: 1.35,
+          textAlign: "center",
+          background: "rgba(0,0,0,0.45)",
+          borderRadius: 24,
+          padding: "24px 30px",
+          textShadow: "0 2px 6px rgba(0,0,0,0.6)",
         }}
       >
-        {narration}
+        {captionAt(splitSentences(narration), frame, durationInFrames - 1)}
       </div>
     </AbsoluteFill>
   );
