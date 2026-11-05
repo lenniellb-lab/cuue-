@@ -4,32 +4,32 @@ import { clamp01, ease, popIn } from "../puppets/paper";
 import voice from "../toon/voice.json";
 import { ABUELA, CUBI, Char, IVAN, LI, MAMA, NENA, PAPA, SAM } from "./Char";
 
-const FPS = 30;
-const W = 1080;
-const H = 1920;
-const SANS = "Inter, 'Inter Display', 'DejaVu Sans', sans-serif";
-const SERIF = "Caladea, 'Bitstream Charter', 'DejaVu Serif', serif";
+export const FPS = 30;
+export const W = 1080;
+export const H = 1920;
+export const SANS = "Inter, 'Inter Display', 'DejaVu Sans', sans-serif";
+export const SERIF = "Caladea, 'Bitstream Charter', 'DejaVu Serif', serif";
 type Word = { w: string; s: number; e: number };
 type Voice = { duration: number; window: number; words: Word[]; mouth: number[] };
-const V = voice as unknown as Record<string, Voice>;
-const IDS = ["s1", "s2", "s3", "s4", "s5", "s6"] as const;
-type SceneId = (typeof IDS)[number];
-const sceneFrames = IDS.map((id) => V[id].window * FPS);
-const total = sceneFrames.reduce((a, b) => a + b, 0);
-const CHAPTERS = ["EL GANCHO", "LA ECONOMÍA", "LA TECNOLOGÍA", "EL MUNDO", "LOS CUBANOS", "LA PREGUNTA"];
+export const V = voice as unknown as Record<string, Voice>;
+export const IDS = ["s1", "s2", "s3", "s4", "s5", "s6"] as const;
+export type SceneId = (typeof IDS)[number];
+export const sceneFrames = IDS.map((id) => V[id].window * FPS);
+export const total = sceneFrames.reduce((a, b) => a + b, 0);
+export const CHAPTERS = ["EL GANCHO", "LA ECONOMÍA", "LA TECNOLOGÍA", "EL MUNDO", "LOS CUBANOS", "LA PREGUNTA"];
 
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
-const wf = (id: SceneId, match: string) => {
+export const wf = (id: SceneId, match: string) => {
   const w = V[id].words.find((x) => norm(x.w).startsWith(norm(match)));
   return w ? Math.round(w.s * FPS) : 0;
 };
-const mouthAt = (id: SceneId, f: number) => {
+export const mouthAt = (id: SceneId, f: number) => {
   const m = V[id].mouth;
   return ((m[f - 1] ?? 0) + (m[f] ?? 0) * 2 + (m[f + 1] ?? 0)) / 4;
 };
 
 // ---------- utilidades visuales ----------
-const Defs: React.FC = () => (
+export const Defs: React.FC = () => (
   <defs>
     {[2, 4, 8, 14, 26].map((b) => (
       <filter key={b} id={`b${b}`} x="-30%" y="-30%" width="160%" height="160%">
@@ -56,7 +56,7 @@ const Defs: React.FC = () => (
   </defs>
 );
 
-const Grad: React.FC<{ id: string; stops: [number, string][]; x2?: number; y2?: number }> = ({ id, stops, x2 = 0, y2 = 1 }) => (
+export const Grad: React.FC<{ id: string; stops: [number, string][]; x2?: number; y2?: number }> = ({ id, stops, x2 = 0, y2 = 1 }) => (
   <defs>
     <linearGradient id={id} x1="0" y1="0" x2={x2} y2={y2}>
       {stops.map(([o, c], i) => (
@@ -66,7 +66,7 @@ const Grad: React.FC<{ id: string; stops: [number, string][]; x2?: number; y2?: 
   </defs>
 );
 
-const Bokeh: React.FC<{ f: number; seed: string; n: number; colors: string[]; y0?: number; y1?: number; r?: [number, number]; blur?: number; drift?: number }> = ({
+export const Bokeh: React.FC<{ f: number; seed: string; n: number; colors: string[]; y0?: number; y1?: number; r?: [number, number]; blur?: number; drift?: number }> = ({
   f, seed, n, colors, y0 = 0, y1 = H, r = [20, 60], blur = 8, drift = 0.3,
 }) => (
   <g filter={`url(#b${blur})`}>
@@ -81,7 +81,7 @@ const Bokeh: React.FC<{ f: number; seed: string; n: number; colors: string[]; y0
   </g>
 );
 
-const GodRays: React.FC<{ x: number; y: number; color: string; n?: number; spread?: number; ang?: number; len?: number; f: number; op?: number }> = ({
+export const GodRays: React.FC<{ x: number; y: number; color: string; n?: number; spread?: number; ang?: number; len?: number; f: number; op?: number }> = ({
   x, y, color, n = 6, spread = 40, ang = 30, len = 2200, f, op = 0.18,
 }) => (
   <g filter="url(#b14)" style={{ mixBlendMode: "screen" }}>
@@ -100,13 +100,13 @@ const GodRays: React.FC<{ x: number; y: number; color: string; n?: number; sprea
   </g>
 );
 
-const Cam: React.FC<{ f: number; dur: number; z0?: number; z1?: number; dx?: number; dy?: number; children: React.ReactNode }> = ({ f, dur, z0 = 1, z1 = 1.06, dx = 0, dy = 0, children }) => {
+export const Cam: React.FC<{ f: number; dur: number; z0?: number; z1?: number; dx?: number; dy?: number; children: React.ReactNode }> = ({ f, dur, z0 = 1, z1 = 1.06, dx = 0, dy = 0, children }) => {
   const p = clamp01(f / dur);
   const z = z0 + (z1 - z0) * p;
   return <g transform={`translate(${W / 2 + dx * p} ${H / 2 + dy * p}) scale(${z}) translate(${-W / 2} ${-H / 2})`}>{children}</g>;
 };
 
-const Silhouette: React.FC<{ x: number; y: number; s: number; f: number; walk?: number; color?: string }> = ({ x, y, s, f, walk = 0, color = "#0b0f17" }) => {
+export const Silhouette: React.FC<{ x: number; y: number; s: number; f: number; walk?: number; color?: string }> = ({ x, y, s, f, walk = 0, color = "#0b0f17" }) => {
   const st = Math.sin(f / 5 + x) * walk;
   return (
     <g transform={`translate(${x} ${y}) scale(${s})`} fill={color}>
@@ -296,7 +296,7 @@ const S2: React.FC<{ f: number }> = ({ f }) => {
 };
 
 // ---------- ciudad (escena 3) ----------
-const CityStreet: React.FC<{ f: number; trainAt: number; up: number }> = ({ f, trainAt, up }) => {
+export const CityStreet: React.FC<{ f: number; trainAt: number; up: number }> = ({ f, trainAt, up }) => {
   const vp = { x: 540, y: 980 };
   const signs = [
     { x: 190, y: 760, t: "CAFÉ", c: "#ff4d6d" },
@@ -699,7 +699,7 @@ const groupWords = (words: Word[]) => {
   return out;
 };
 
-const Captions: React.FC<{ id: SceneId; f: number }> = ({ id, f }) => {
+export const Captions: React.FC<{ id: SceneId; f: number }> = ({ id, f }) => {
   const t = f / FPS;
   const groups = groupWords(V[id].words);
   let gi = -1;
@@ -734,7 +734,7 @@ const Captions: React.FC<{ id: SceneId; f: number }> = ({ id, f }) => {
   );
 };
 
-const Chapter: React.FC<{ idx: number; f: number }> = ({ idx, f }) => {
+export const Chapter: React.FC<{ idx: number; f: number }> = ({ idx, f }) => {
   if (idx === 0) return null;
   const o = clamp01((f - 8) / 10) * (1 - clamp01((f - 80) / 14));
   if (o <= 0) return null;
@@ -750,9 +750,9 @@ const Chapter: React.FC<{ idx: number; f: number }> = ({ idx, f }) => {
 
 const SCENES: Record<SceneId, React.FC<{ f: number }>> = { s1: S1, s2: S2, s3: S3, s4: S4, s5: S5, s6: S6 };
 
-const Shell: React.FC<{ id: SceneId; idx: number }> = ({ id, idx }) => {
+export const Shell: React.FC<{ id: SceneId; idx: number; scenes?: Record<SceneId, React.FC<{ f: number }>> }> = ({ id, idx, scenes = SCENES }) => {
   const f = useCurrentFrame();
-  const Comp = SCENES[id];
+  const Comp = scenes[id];
   const fadeIn = idx === 0 ? clamp01(f / 12) : clamp01(f / 8);
   const leak = idx === 0 ? 0 : 1 - clamp01(f / 16);
   return (

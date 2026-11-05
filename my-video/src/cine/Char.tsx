@@ -18,7 +18,13 @@ export type CLook = {
   lips: string;
   glasses?: boolean;
   lashes?: boolean;
+  pants?: string;
+  pantsShadow?: string;
+  shoes?: string;
 };
+
+// Distancia de la cintura a la suela (unidades locales) en modo cuerpo entero
+export const FEET = 410;
 
 export type CharProps = {
   id: string;
@@ -35,11 +41,14 @@ export type CharProps = {
   walk?: boolean;
   rim?: string; // color de la luz de borde
   rimSide?: 1 | -1; // 1 = luz desde la derecha
-  key?: string;
   flip?: boolean;
+  full?: boolean; // cuerpo entero con piernas
+  run?: boolean;
 };
 
 const rad = (d: number) => (d * Math.PI) / 180;
+const TORSO_CROP = "M-138 -300 Q-178 -292 -176 -226 L-170 420 L170 420 L176 -226 Q178 -292 138 -300 Q64 -342 0 -338 Q-64 -342 -138 -300 Z";
+const TORSO_FULL = "M-138 -300 Q-178 -292 -176 -226 L-162 40 L162 40 L176 -226 Q178 -292 138 -300 Q64 -342 0 -338 Q-64 -342 -138 -300 Z";
 
 const Arm: React.FC<{ sx: number; sy: number; a1: number; a2: number; color: string; shade: string; skin: string; skinShadow: string; side: 1 | -1 }> = ({
   sx, sy, a1, a2, color, shade, skin, skinShadow, side,
@@ -60,6 +69,27 @@ const Arm: React.FC<{ sx: number; sy: number; a1: number; a2: number; color: str
         <ellipse cx={-3} cy={14} rx={26} ry={32} fill={skin} />
         <ellipse cx={side * 24} cy={4} rx={10} ry={18} fill={skin} transform={`rotate(${side * 30} ${side * 24} 4)`} />
         <ellipse cx={-6} cy={4} rx={10} ry={8} fill="rgba(255,255,255,0.25)" />
+      </g>
+    </g>
+  );
+};
+
+const Leg: React.FC<{ hx: number; a1: number; a2: number; color: string; shade: string; shoe: string; side: 1 | -1 }> = ({ hx, a1, a2, color, shade, shoe, side }) => {
+  const L1 = 150;
+  const L2 = 150;
+  const kx = hx + Math.cos(rad(a1)) * L1;
+  const ky = 100 + Math.sin(rad(a1)) * L1;
+  const fx = kx + Math.cos(rad(a1 + a2)) * L2;
+  const fy = ky + Math.sin(rad(a1 + a2)) * L2;
+  const d = `M${hx} 100 L${kx} ${ky} L${fx} ${fy}`;
+  return (
+    <g>
+      <path d={d} stroke={shade} strokeWidth={78} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} stroke={color} strokeWidth={62} fill="none" strokeLinecap="round" strokeLinejoin="round" transform={`translate(${-side * 5} 0)`} />
+      <g transform={`translate(${fx} ${fy + 8})`}>
+        <ellipse cx={side * 10} cy={10} rx={56} ry={28} fill="#0d0a08" />
+        <ellipse cx={side * 8} cy={4} rx={52} ry={24} fill={shoe} />
+        <ellipse cx={side * 0 - 14} cy={-4} rx={20} ry={8} fill="rgba(255,255,255,0.25)" />
       </g>
     </g>
   );
@@ -178,13 +208,16 @@ const HairShape: React.FC<{ style: CHair; pid: string; back?: boolean }> = ({ st
 
 export const Char: React.FC<CharProps> = ({
   id, look, f, x, y, s = 1, expr = "happy", mouth = 0, lookX = 0, lookY = 0, gesture = "none", walk = false,
-  rim = "#7fd8ff", rimSide = 1, flip = false,
+  rim = "#7fd8ff", rimSide = 1, flip = false, full = false, run = false,
 }) => {
   const pid = `c${id}`;
   const t = f + id.length * 9;
   const breath = Math.sin(t / 14) * 4;
-  const bob = walk ? -Math.abs(Math.sin(t / 5)) * 14 : 0;
-  const sway = walk ? Math.sin(t / 5) * 3 : Math.sin(t / 30) * 1.5;
+  const moving = walk || run;
+  const sp = run ? 3 : 5;
+  const bob = moving ? -Math.abs(Math.sin(t / sp)) * (run ? 26 : 14) : 0;
+  const stride = Math.sin(t / sp) * (run ? 36 : 22);
+  const sway = moving ? Math.sin(t / sp) * 3 : Math.sin(t / 30) * 1.5;
   const headTilt = Math.sin(t / 37) * 3 + (expr === "amazed" ? -4 : 0) + lookX * 3 + mouth * Math.sin(t / 5) * 3;
   const blinkT = (t + id.length * 23) % 120;
   const blink = blinkT < 5 ? Math.sin((blinkT / 5) * Math.PI) : 0;
@@ -201,7 +234,12 @@ export const Char: React.FC<CharProps> = ({
     angry: { lid: 0.32, lower: 0.1, wide: 0.96, browY: -68, browA: 20, smile: -0.6 },
   }[expr];
   const lid = Math.min(1, E.lid + blink * (1 - E.lid));
-  const [aL1, aL2, aR1, aR2] = gestureAngles(gesture, t, m);
+  const ga = gestureAngles(gesture, t, m);
+  // al caminar sin gesto, los brazos se balancean al ritmo de las piernas
+  const [aL1, aL2, aR1, aR2] = moving && gesture === "none" ? [100 - stride * 1.1, 12, 80 - stride * 1.1, -12] : ga;
+  const pants = look.pants ?? "#2b3444";
+  const pantsShadow = look.pantsShadow ?? "#151b25";
+  const shoe = look.shoes ?? "#3a2a20";
   const rimGrad = `${pid}rim`;
 
   return (
@@ -239,12 +277,20 @@ export const Char: React.FC<CharProps> = ({
         </linearGradient>
       </defs>
 
+      {full ? (
+        <g>
+          <Leg hx={-62} a1={92 + stride} a2={moving ? -Math.max(0, Math.sin(t / sp)) * 40 : -2} color={pants} shade={pantsShadow} shoe={shoe} side={-1} />
+          <Leg hx={62} a1={88 - stride} a2={moving ? Math.max(0, -Math.sin(t / sp)) * 40 : 2} color={pants} shade={pantsShadow} shoe={shoe} side={1} />
+          <path d="M-158 20 L158 20 L150 130 Q0 150 -150 130 Z" fill={pants} />
+          <rect x={-160} y={14} width={320} height={22} rx={8} fill="#1c140e" />
+        </g>
+      ) : null}
       {/* brazos detrás */}
       <Arm sx={-132} sy={-290 + breath} a1={aL1} a2={aL2} color={look.top} shade={look.topShadow} skin={look.skin} skinShadow={look.skinShadow} side={-1} />
 
       {/* torso */}
       <g transform={`translate(0 ${breath * 0.5})`}>
-        <path d="M-138 -300 Q-178 -292 -176 -226 L-170 420 L170 420 L176 -226 Q178 -292 138 -300 Q64 -342 0 -338 Q-64 -342 -138 -300 Z" fill={`url(#${pid}top)`} />
+        <path d={full ? TORSO_FULL : TORSO_CROP} fill={`url(#${pid}top)`} />
         {look.pattern === "cuba" ? (
           <g>
             <path d="M-60 -330 L-20 -150 L-60 -40 L-100 -150 Z" fill="#c81d2e" opacity={0.9} />
@@ -282,7 +328,7 @@ export const Char: React.FC<CharProps> = ({
             <path d="M-50 -334 L-10 -180 L-100 -260 Z M50 -334 L10 -180 L100 -260 Z" fill="rgba(0,0,0,0.18)" />
           </g>
         ) : null}
-        <path d="M-138 -300 Q-178 -292 -176 -226 L-170 420 L170 420 L176 -226 Q178 -292 138 -300 Q64 -342 0 -338 Q-64 -342 -138 -300 Z" fill="none" stroke={`url(#${rimGrad})`} strokeWidth={16} filter={`url(#${pid}soft)`} opacity={0.9} />
+        <path d={full ? TORSO_FULL : TORSO_CROP} fill="none" stroke={`url(#${rimGrad})`} strokeWidth={16} filter={`url(#${pid}soft)`} opacity={0.9} />
         {/* cuello */}
         <path d="M-46 -380 L-50 -318 Q0 -296 50 -318 L46 -380 Z" fill={`url(#${pid}neck)`} />
       </g>
@@ -353,11 +399,11 @@ export const Char: React.FC<CharProps> = ({
 };
 
 // Reparto (los mismos personajes del vídeo anterior, con el nuevo estilo)
-export const CUBI: CLook = { skin: "#c98f62", skinShadow: "#8f5a37", hair: "#16100b", hairLight: "#4a3424", hairStyle: "curly", top: "#2a56c9", topShadow: "#162f78", pattern: "cuba", iris: "#6b3d1d", lips: "#a8584e" };
-export const SAM: CLook = { skin: "#f1c8a6", skinShadow: "#c2876a", hair: "#c98a2a", hairLight: "#f2c66a", hairStyle: "swept", top: "#1e2f66", topShadow: "#0e1838", pattern: "usa", iris: "#3c6fa8", lips: "#c27a72" };
-export const LI: CLook = { skin: "#efcfa7", skinShadow: "#bf9471", hair: "#141018", hairLight: "#3d3346", hairStyle: "bun", top: "#c4221a", topShadow: "#6e0f0b", pattern: "china", iris: "#3b2416", lips: "#c0605e", lashes: true };
-export const IVAN: CLook = { skin: "#f4d6c2", skinShadow: "#c99a84", hair: "#7a4a26", hairLight: "#b07a4c", hairStyle: "crew", top: "#eeeeea", topShadow: "#a9aab0", pattern: "russia", iris: "#5d7f6a", lips: "#c47e78" };
-export const MAMA: CLook = { skin: "#e0ad82", skinShadow: "#a8714f", hair: "#5b2410", hairLight: "#9a4a26", hairStyle: "wavy", top: "#1f8a64", topShadow: "#0e4a35", pattern: "none", iris: "#4a2a14", lips: "#b8545a", lashes: true };
-export const PAPA: CLook = { skin: "#8e5b3c", skinShadow: "#5a3522", hair: "#0d0b0a", hairLight: "#3a302a", hairStyle: "afro", top: "#3b4250", topShadow: "#1d222b", pattern: "suit", iris: "#2e1a0e", lips: "#7a3f36" };
-export const ABUELA: CLook = { skin: "#d9a274", skinShadow: "#9c6a49", hair: "#d8d8dc", hairLight: "#ffffff", hairStyle: "granny", top: "#d7609a", topShadow: "#7d2a55", pattern: "none", iris: "#4a2c16", lips: "#a85a5e", glasses: true, lashes: true };
-export const NENA: CLook = { skin: "#b97b50", skinShadow: "#7c4a2c", hair: "#3a1c0c", hairLight: "#6b3a1c", hairStyle: "pigtails", top: "#f2b632", topShadow: "#a06d10", pattern: "none", iris: "#3a2210", lips: "#b0565a", lashes: true };
+export const CUBI: CLook = { skin: "#c98f62", skinShadow: "#8f5a37", hair: "#16100b", hairLight: "#4a3424", hairStyle: "curly", top: "#2a56c9", topShadow: "#162f78", pattern: "cuba", iris: "#6b3d1d", lips: "#a8584e" , pants: "#e9e4d8", pantsShadow: "#a8a194", shoes: "#c81d2e" };
+export const SAM: CLook = { skin: "#f1c8a6", skinShadow: "#c2876a", hair: "#c98a2a", hairLight: "#f2c66a", hairStyle: "swept", top: "#1e2f66", topShadow: "#0e1838", pattern: "usa", iris: "#3c6fa8", lips: "#c27a72" , pants: "#d9d4c6", pantsShadow: "#9c9686", shoes: "#3a2518" };
+export const LI: CLook = { skin: "#efcfa7", skinShadow: "#bf9471", hair: "#141018", hairLight: "#3d3346", hairStyle: "bun", top: "#c4221a", topShadow: "#6e0f0b", pattern: "china", iris: "#3b2416", lips: "#c0605e", lashes: true , pants: "#2a1a1a", pantsShadow: "#120a0a", shoes: "#111" };
+export const IVAN: CLook = { skin: "#f4d6c2", skinShadow: "#c99a84", hair: "#7a4a26", hairLight: "#b07a4c", hairStyle: "crew", top: "#eeeeea", topShadow: "#a9aab0", pattern: "russia", iris: "#5d7f6a", lips: "#c47e78" , pants: "#2c3d6b", pantsShadow: "#16203a", shoes: "#2b2b2b" };
+export const MAMA: CLook = { skin: "#e0ad82", skinShadow: "#a8714f", hair: "#5b2410", hairLight: "#9a4a26", hairStyle: "wavy", top: "#1f8a64", topShadow: "#0e4a35", pattern: "none", iris: "#4a2a14", lips: "#b8545a", lashes: true , pants: "#25335c", pantsShadow: "#121a30", shoes: "#c9a07a" };
+export const PAPA: CLook = { skin: "#8e5b3c", skinShadow: "#5a3522", hair: "#0d0b0a", hairLight: "#3a302a", hairStyle: "afro", top: "#3b4250", topShadow: "#1d222b", pattern: "suit", iris: "#2e1a0e", lips: "#7a3f36" , pants: "#3b4250", pantsShadow: "#1d222b", shoes: "#1a120c" };
+export const ABUELA: CLook = { skin: "#d9a274", skinShadow: "#9c6a49", hair: "#d8d8dc", hairLight: "#ffffff", hairStyle: "granny", top: "#d7609a", topShadow: "#7d2a55", pattern: "none", iris: "#4a2c16", lips: "#a85a5e", glasses: true, lashes: true , pants: "#6b4a8a", pantsShadow: "#3a2650", shoes: "#5a3a2a" };
+export const NENA: CLook = { skin: "#b97b50", skinShadow: "#7c4a2c", hair: "#3a1c0c", hairLight: "#6b3a1c", hairStyle: "pigtails", top: "#f2b632", topShadow: "#a06d10", pattern: "none", iris: "#3a2210", lips: "#b0565a", lashes: true , pants: "#e85a8a", pantsShadow: "#9a2a52", shoes: "#ffffff" };
